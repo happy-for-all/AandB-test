@@ -69,9 +69,12 @@ MUNICIPAL_COORDS = {
 def safe_get(row, possible_keys):
     for key in possible_keys:
         if key in row:
+            # pandasの欠損値(NaN)なら次のキーを探す
+            if pd.isna(row[key]):
+                continue
             value = str(row[key]).strip()
-            if value.lower() == "nan":
-                return ""
+            if value.lower() == "nan" or value == "":
+                continue
             return value
     return ""
 
@@ -117,9 +120,11 @@ def run_build():
             print(f"❌ CSV読込失敗 ({service_name})。スキップします。")
             continue
 
-        # 👑 【バグ修正】法人住所のすり抜けを防止するため、必ず「事業所」の市区町村列を狙い撃ちでターゲットにします
+        # 👑 【アドオン修復】列名に含まれる見えない空白や改行をすべて掃除する（検索漏れ防止）
+        df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+
+        # 👑 【バグ修正】法人住所のすり抜けを防止するため、必ず「事業所」の市区町村列を狙い撃ち
         target_col = "事業所住所（市区町村）"
-        # 表記揺れ（半角括弧）にも100%対応する安全ガード
         if "事業所住所（市区町村）" not in df.columns and "事業所住所(市区町村)" in df.columns:
             target_col = "事業所住所(市区町村)"
         
@@ -127,7 +132,8 @@ def run_build():
             print(f"❌ 事業所住所（市区町村）列が見つかりません ({service_name})。")
             continue
 
-        df_filtered = df[df[target_col].str.startswith(("大阪府", "東京都"), na=False)].copy()
+        # 👑 【アドオン修復】startswithではなくcontainsを使い、前後に空白があっても確実に取りこぼさないようにする
+        df_filtered = df[df[target_col].astype(str).str.contains("大阪府|東京都", na=False)].copy()
         
         facilities = []
         
@@ -145,6 +151,9 @@ def run_build():
 
             raw_lat = safe_get(row, ["事業所緯度", "緯度"])
             raw_lon = safe_get(row, ["事業所経度", "経度"])
+            
+            # 👑 【機能追加】CSVからURLを安全に取得する
+            raw_url = safe_get(row, ["事業所URL", "事業所ＵＲＬ", "ホームページ", "ホームページアドレス", "法人URL"])
             
             lat, lon = None, None
             is_approximate = False
@@ -181,6 +190,7 @@ def run_build():
                 "tel_clean": tel_clean,
                 "lat": round(lat, 6),
                 "lon": round(lon, 6),
+                "url": raw_url, # 👑 URLデータをJSONに追加
                 "is_approximate": is_approximate
             })
 
