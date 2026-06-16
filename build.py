@@ -5,13 +5,16 @@ import zipfile
 import io
 import re
 import pandas as pd
-import unicodedata  # 👑 【追加】全角を半角に直すための標準ライブラリ
+import unicodedata
+import math
+import shutil  # 👑 【追加】OSに依存せず安全にファイルをコピーするため
 
 # ==========================================
-# 👑 福祉ポータル(AandB): 複数サービス横断・自動ビルドエンジン (Ver 1.4.2 決定版)
+# 👑 福祉ポータル(AandB): 複数サービス横断・自動ビルドエンジン (Ver 1.4.4 鉄壁版)
 # 開発者: ちゃろ ＆ AIバディ
 # ==========================================
 
+# 👑 【ちゃろさんの運用に最適化】ファイル名を固定し、上書き運用することで安全・確実にする
 SERVICE_DEFINITIONS = [
     {
         "zip_file": "sfkopendata_202603_45.zip",
@@ -78,7 +81,6 @@ def safe_get(row, possible_keys):
             return value
     return ""
 
-# 👑 【機能追加】URLだけを綺麗に抽出・補完・修復する強力なフィルター関数
 def extract_clean_url(raw_text):
     if not raw_text or pd.isna(raw_text):
         return ""
@@ -92,6 +94,9 @@ def extract_clean_url(raw_text):
         extracted = match.group(0)
         if extracted.startswith("www."):
             extracted = "https://" + extracted
+        
+        # 👑 【改善】末尾に紛れ込んだ全角カッコや引用符を綺麗に削ぎ落とす
+        extracted = extracted.rstrip('\'"）)]}>')
         
         if len(extracted) <= 8 and extracted.endswith("://"):
             return ""
@@ -123,7 +128,13 @@ def run_build():
 
         try:
             zip_file = zipfile.ZipFile(zip_file_path)
-            csv_filename = [f for f in zip_file.namelist() if f.endswith('.csv')][0]
+            csv_files = [f for f in zip_file.namelist() if f.lower().endswith('.csv') and not f.startswith('__MACOSX')]
+            
+            # 👑 【改善】CSVが2つ以上あるなど、異常な場合はデグレ防止のため処理を止める
+            if len(csv_files) != 1:
+                raise Exception(f"❌ ZIP内のCSVファイル数が異常です（{len(csv_files)}個検出されました）。正確なデータ抽出のため処理を中断します。")
+            
+            csv_filename = csv_files[0]
         except Exception as e:
             print(f"❌ ZIP解凍エラー ({service_name}): {e}")
             continue
@@ -158,6 +169,8 @@ def run_build():
         
         for _, row in df_filtered.iterrows():
             name = safe_get(row, ["事業所の名称", "事業所名称"])
+            name_kana = safe_get(row, ["事業所の名称_かな", "事業所名称_かな", "フリガナ", "ふりがな"])
+            
             city = safe_get(row, ["事業所住所（市区町村）", "事業所住所(市区町村)", target_col])
             address_detail = safe_get(row, ["事業所住所（番地以降）", "事業所住所(番地以降)"])
             
@@ -171,7 +184,6 @@ def run_build():
             raw_lat = safe_get(row, ["事業所緯度", "緯度"])
             raw_lon = safe_get(row, ["事業所経度", "経度"])
             
-            # 👑 【機能追加】クリーンなURLを抽出
             raw_url_text = safe_get(row, ["事業所URL", "事業所ＵＲＬ", "ホームページ", "ホームページアドレス", "法人URL"])
             clean_url = extract_clean_url(raw_url_text)
             
@@ -183,6 +195,9 @@ def run_build():
                 if raw_lon: lon = float(raw_lon)
             except Exception:
                 pass
+                
+            if lat is not None and math.isnan(lat): lat = None
+            if lon is not None and math.isnan(lon): lon = None
                 
             if lat is None or lon is None:
                 is_approximate = True
@@ -204,13 +219,14 @@ def run_build():
 
             facilities.append({
                 "name": name,
+                "name_kana": name_kana,
                 "service_type": service_name,   
                 "address": address,
                 "tel": raw_tel,
                 "tel_clean": tel_clean,
                 "lat": round(lat, 6),
                 "lon": round(lon, 6),
-                "url": clean_url, # 👑 重複していた古いraw_url行を削除しました！
+                "url": clean_url,
                 "is_approximate": is_approximate
             })
 
@@ -220,7 +236,8 @@ def run_build():
             
         summary_logs.append(f" - {service_name}: {len(facilities)}件 生成完了")
 
-    os.system(f"cp index.html {target_dir}/")
+    # 👑 【改善】環境に依存せず、常に安全にファイルをコピーする
+    shutil.copy2("index.html", os.path.join(target_dir, "index.html"))
     
     print("\n==========================================")
     for log in summary_logs: print(log)
