@@ -5,6 +5,7 @@ import zipfile
 import io
 import re
 import pandas as pd
+import unicodedata  # 👑 【追加】全角を半角に直すための標準ライブラリ
 
 # ==========================================
 # 👑 福祉ポータル(AandB): 複数サービス横断・自動ビルドエンジン (Ver 1.4.2 決定版)
@@ -76,6 +77,31 @@ def safe_get(row, possible_keys):
             if value.lower() == "nan" or value == "":
                 continue
             return value
+    return ""
+    # 👑 【機能追加】URLだけを綺麗に抽出・補完・修復する強力なフィルター関数
+def extract_clean_url(raw_text):
+    if not raw_text or pd.isna(raw_text):
+        return ""
+    
+    # 1. 全角英数字を半角に変換し、前後の空白や改行を消す
+    text = unicodedata.normalize('NFKC', str(raw_text)).replace('\n', '').replace('\r', '').strip()
+    
+    # 2. URLの形（http://, https://, または www. で始まる英数字記号）だけを正規表現で抜き出す
+    url_pattern = re.compile(r'(?:https?://|www\.)[a-zA-Z0-9\.\-\_]+[\w/\:\%\#\$\&\?\(\)\~\.\=\+\-]*')
+    match = url_pattern.search(text)
+    
+    if match:
+        extracted = match.group(0)
+        # 3. もし「www.」から始まっていれば、リンクとして機能するように https:// を補完する
+        if extracted.startswith("www."):
+            extracted = "https://" + extracted
+        
+        # 4. 「http://」だけのような短すぎる無効なゴミデータを弾く
+        if len(extracted) <= 8 and extracted.endswith("://"):
+            return ""
+            
+        return extracted
+        
     return ""
 
 def run_build():
@@ -152,8 +178,9 @@ def run_build():
             raw_lat = safe_get(row, ["事業所緯度", "緯度"])
             raw_lon = safe_get(row, ["事業所経度", "経度"])
             
-            # 👑 【機能追加】CSVからURLを安全に取得する
-            raw_url = safe_get(row, ["事業所URL", "事業所ＵＲＬ", "ホームページ", "ホームページアドレス", "法人URL"])
+            # 👑 【機能追加】CSVからURLを安全に取得し、さらに強力なフィルターで純粋なURLのみを抽出する
+            raw_url_text = safe_get(row, ["事業所URL", "事業所ＵＲＬ", "ホームページ", "ホームページアドレス", "法人URL"])
+            clean_url = extract_clean_url(raw_url_text)
             
             lat, lon = None, None
             is_approximate = False
@@ -190,6 +217,7 @@ def run_build():
                 "tel_clean": tel_clean,
                 "lat": round(lat, 6),
                 "lon": round(lon, 6),
+                "url": clean_url, # 👑 フィルターを通した綺麗なURLを保存
                 "url": raw_url, # 👑 URLデータをJSONに追加
                 "is_approximate": is_approximate
             })
