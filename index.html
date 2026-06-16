@@ -300,15 +300,13 @@
                 } else {
                     telHtml = `<p style="color: var(--text-sub);">📞 電話番号情報なし</p>`;
                 }
-
-                // 👑 【機能追加】HPリンクとバッジの生成ロジック
-                const hasHp = item.url && item.url.length > 5 && (item.url.includes("http") || item.url.includes("www"));
+                
+                // 👑 【機能改善】Python側で完璧に処理済みのURLを安全に表示する
+                const hasHp = item.url && item.url.startsWith("http");
                 let titleHtml = "";
                 if (hasHp) {
-                    // httpが含まれていない場合は補完する
-                    let linkUrl = item.url.startsWith("http") ? item.url : "https://" + item.url;
-                    let hpBadge = `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; text-decoration: none; display: inline-block;">HPあり</a>`;
-                    titleHtml = `<h3 style="margin-top:5px; margin-bottom:5px; display:flex; align-items:center; flex-wrap:wrap;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--main-blue); text-decoration: underline;">🏠 ${item.name}</a> ${hpBadge}</h3>`;
+                    let hpBadge = `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; text-decoration: none; display: inline-block;">HPあり</a>`;
+                    titleHtml = `<h3 style="margin-top:5px; margin-bottom:5px; display:flex; align-items:center; flex-wrap:wrap;"><a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color: var(--main-blue); text-decoration: underline;">🏠 ${item.name}</a> ${hpBadge}</h3>`;
                 } else {
                     let hpBadge = `<span style="background-color: #94a3b8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; display: inline-block;">HPなし</span>`;
                     titleHtml = `<h3 style="margin-top:5px; margin-bottom:5px; display:flex; align-items:center; flex-wrap:wrap;">🏠 ${item.name} ${hpBadge}</h3>`;
@@ -320,9 +318,9 @@
                     ${titleHtml}
                     <p style="margin-top: 8px;">📍 ${item.address}</p>
                     ${telHtml}
+                    ${hasHp ? `<p style="font-size: 0.75rem; color: #94a3b8; margin: 2px 0 0 0;">※事業所専用ではなく、運営法人の親サイトが表示される場合があります</p>` : ''}
                 `;
                 resultsDiv.appendChild(card);
-            }
 
             currentIndex = limit;
             document.getElementById('moreContainer').style.display = (currentIndex < displayData.length) ? 'block' : 'none';
