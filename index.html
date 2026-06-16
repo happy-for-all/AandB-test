@@ -294,18 +294,31 @@
                 else if (item.service_type === "就労継続支援Ｂ型") tagClass = "tag-shuro-b";
                 else if (item.service_type === "放課後等デイサービス") tagClass = "tag-houdei";
 
-                let telHtml = "";
+        let telHtml = "";
                 if (item.tel_clean && item.tel_clean.length > 0) {
                     telHtml = `<p>📞 電話: <a href="tel:${item.tel_clean}" class="tel-link">${item.tel}</a></p>`;
                 } else {
                     telHtml = `<p style="color: var(--text-sub);">📞 電話番号情報なし</p>`;
                 }
 
+                // 👑 【機能追加】HPリンクとバッジの生成ロジック
+                const hasHp = item.url && item.url.length > 5 && (item.url.includes("http") || item.url.includes("www"));
+                let titleHtml = "";
+                if (hasHp) {
+                    // httpが含まれていない場合は補完する
+                    let linkUrl = item.url.startsWith("http") ? item.url : "https://" + item.url;
+                    let hpBadge = `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="background-color: #10b981; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; text-decoration: none; display: inline-block;">HPあり</a>`;
+                    titleHtml = `<h3 style="margin-top:5px; margin-bottom:5px; display:flex; align-items:center; flex-wrap:wrap;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--main-blue); text-decoration: underline;">🏠 ${item.name}</a> ${hpBadge}</h3>`;
+                } else {
+                    let hpBadge = `<span style="background-color: #94a3b8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-left: 8px; display: inline-block;">HPなし</span>`;
+                    titleHtml = `<h3 style="margin-top:5px; margin-bottom:5px; display:flex; align-items:center; flex-wrap:wrap;">🏠 ${item.name} ${hpBadge}</h3>`;
+                }
+
                 card.innerHTML = `
                     ${distanceHtml}<br>
                     <span class="service-tag ${tagClass}">${item.service_type}</span>
-                    <h3 style="margin-top:5px;">🏠 ${item.name}</h3>
-                    <p>📍 ${item.address}</p>
+                    ${titleHtml}
+                    <p style="margin-top: 8px;">📍 ${item.address}</p>
                     ${telHtml}
                 `;
                 resultsDiv.appendChild(card);
