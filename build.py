@@ -7,14 +7,13 @@ import re
 import pandas as pd
 import unicodedata
 import math
-import shutil  # 👑 【追加】OSに依存せず安全にファイルをコピーするため
+import shutil  # 👑 OSに依存せず安全にファイルをコピーするため
 
 # ==========================================
-# 👑 福祉ポータル(AandB): 複数サービス横断・自動ビルドエンジン (Ver 1.4.4 鉄壁版)
+# 👑 福祉ポータル(AandB): 複数サービス横断・自動ビルドエンジン (Ver 1.4.5 超・鉄壁版)
 # 開発者: ちゃろ ＆ AIバディ
 # ==========================================
 
-# 👑 【ちゃろさんの運用に最適化】ファイル名を固定し、上書き運用することで安全・確実にする
 SERVICE_DEFINITIONS = [
     {
         "zip_file": "sfkopendata_202603_45.zip",
@@ -95,7 +94,6 @@ def extract_clean_url(raw_text):
         if extracted.startswith("www."):
             extracted = "https://" + extracted
         
-        # 👑 【改善】末尾に紛れ込んだ全角カッコや引用符を綺麗に削ぎ落とす
         extracted = extracted.rstrip('\'"）)]}>')
         
         if len(extracted) <= 8 and extracted.endswith("://"):
@@ -130,11 +128,16 @@ def run_build():
             zip_file = zipfile.ZipFile(zip_file_path)
             csv_files = [f for f in zip_file.namelist() if f.lower().endswith('.csv') and not f.startswith('__MACOSX')]
             
-            # 👑 【改善】CSVが2つ以上あるなど、異常な場合はデグレ防止のため処理を止める
-            if len(csv_files) != 1:
-                raise Exception(f"❌ ZIP内のCSVファイル数が異常です（{len(csv_files)}個検出されました）。正確なデータ抽出のため処理を中断します。")
-            
-            csv_filename = csv_files[0]
+            if not csv_files:
+                raise Exception("CSVファイルが見つかりません。")
+                
+            # 👑 【改善】CSVが複数ある場合、エラーで止めずに「一番サイズの大きいファイル」を本命として賢く選ぶ
+            if len(csv_files) > 1:
+                print(f"⚠️ [通知] ZIP内に複数のCSVを検出しました。最もサイズの大きいファイルを本命として処理します。")
+                csv_filename = max(csv_files, key=lambda f: zip_file.getinfo(f).file_size)
+            else:
+                csv_filename = csv_files[0]
+                
         except Exception as e:
             print(f"❌ ZIP解凍エラー ({service_name}): {e}")
             continue
@@ -236,7 +239,6 @@ def run_build():
             
         summary_logs.append(f" - {service_name}: {len(facilities)}件 生成完了")
 
-    # 👑 【改善】環境に依存せず、常に安全にファイルをコピーする
     shutil.copy2("index.html", os.path.join(target_dir, "index.html"))
     
     print("\n==========================================")
