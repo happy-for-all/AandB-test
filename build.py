@@ -64,13 +64,12 @@ MUNICIPAL_COORDS = {
     "阪南市": {"lat": 34.3592, "lon": 135.2442},
     "泉南市": {"lat": 34.3725, "lon": 135.2758},
     "フェイルセーフ大阪府庁": {"lat": 34.6862, "lon": 135.5201},
-    "フェイルセーフ東京都庁": {"lat": 35.6895, "lon": 139.6917} # 👑 追加
+    "フェイルセーフ東京都庁": {"lat": 35.6895, "lon": 139.6917}
 }
 
 def safe_get(row, possible_keys):
     for key in possible_keys:
         if key in row:
-            # pandasの欠損値(NaN)なら次のキーを探す
             if pd.isna(row[key]):
                 continue
             value = str(row[key]).strip()
@@ -78,25 +77,22 @@ def safe_get(row, possible_keys):
                 continue
             return value
     return ""
-    # 👑 【機能追加】URLだけを綺麗に抽出・補完・修復する強力なフィルター関数
+
+# 👑 【機能追加】URLだけを綺麗に抽出・補完・修復する強力なフィルター関数
 def extract_clean_url(raw_text):
     if not raw_text or pd.isna(raw_text):
         return ""
     
-    # 1. 全角英数字を半角に変換し、前後の空白や改行を消す
     text = unicodedata.normalize('NFKC', str(raw_text)).replace('\n', '').replace('\r', '').strip()
     
-    # 2. URLの形（http://, https://, または www. で始まる英数字記号）だけを正規表現で抜き出す
     url_pattern = re.compile(r'(?:https?://|www\.)[a-zA-Z0-9\.\-\_]+[\w/\:\%\#\$\&\?\(\)\~\.\=\+\-]*')
     match = url_pattern.search(text)
     
     if match:
         extracted = match.group(0)
-        # 3. もし「www.」から始まっていれば、リンクとして機能するように https:// を補完する
         if extracted.startswith("www."):
             extracted = "https://" + extracted
         
-        # 4. 「http://」だけのような短すぎる無効なゴミデータを弾く
         if len(extracted) <= 8 and extracted.endswith("://"):
             return ""
             
@@ -146,10 +142,8 @@ def run_build():
             print(f"❌ CSV読込失敗 ({service_name})。スキップします。")
             continue
 
-        # 👑 【アドオン修復】列名に含まれる見えない空白や改行をすべて掃除する（検索漏れ防止）
         df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
 
-        # 👑 【バグ修正】法人住所のすり抜けを防止するため、必ず「事業所」の市区町村列を狙い撃ち
         target_col = "事業所住所（市区町村）"
         if "事業所住所（市区町村）" not in df.columns and "事業所住所(市区町村)" in df.columns:
             target_col = "事業所住所(市区町村)"
@@ -158,7 +152,6 @@ def run_build():
             print(f"❌ 事業所住所（市区町村）列が見つかりません ({service_name})。")
             continue
 
-        # 👑 【アドオン修復】startswithではなくcontainsを使い、前後に空白があっても確実に取りこぼさないようにする
         df_filtered = df[df[target_col].astype(str).str.contains("大阪府|東京都", na=False)].copy()
         
         facilities = []
@@ -178,7 +171,7 @@ def run_build():
             raw_lat = safe_get(row, ["事業所緯度", "緯度"])
             raw_lon = safe_get(row, ["事業所経度", "経度"])
             
-            # 👑 【機能追加】CSVからURLを安全に取得し、さらに強力なフィルターで純粋なURLのみを抽出する
+            # 👑 【機能追加】クリーンなURLを抽出
             raw_url_text = safe_get(row, ["事業所URL", "事業所ＵＲＬ", "ホームページ", "ホームページアドレス", "法人URL"])
             clean_url = extract_clean_url(raw_url_text)
             
@@ -217,8 +210,7 @@ def run_build():
                 "tel_clean": tel_clean,
                 "lat": round(lat, 6),
                 "lon": round(lon, 6),
-                "url": clean_url, # 👑 フィルターを通した綺麗なURLを保存
-                "url": raw_url, # 👑 URLデータをJSONに追加
+                "url": clean_url, # 👑 重複していた古いraw_url行を削除しました！
                 "is_approximate": is_approximate
             })
 
@@ -228,8 +220,6 @@ def run_build():
             
         summary_logs.append(f" - {service_name}: {len(facilities)}件 生成完了")
 
-    # 👑 【修正】不要な data.json の重複上書きブロックの削除報告注記を、
-    # 実行効率向上のためループの外側（出力完了ログの前）に移動しました。
     os.system(f"cp index.html {target_dir}/")
     
     print("\n==========================================")
